@@ -21,6 +21,7 @@ import (
 
 	"github.com/cilium/cilium/pkg/datapath/linux/probes"
 	"github.com/cilium/cilium/pkg/datapath/linux/sysctl"
+	datapathOption "github.com/cilium/cilium/pkg/datapath/option"
 	"github.com/cilium/cilium/pkg/datapath/tables"
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
 	"github.com/cilium/cilium/pkg/kpr"
@@ -43,6 +44,9 @@ type kprInitializer struct {
 }
 
 func (r *kprInitializer) InitKubeProxyReplacementOptions() error {
+	netkitMode := option.Config.DatapathMode == datapathOption.DatapathModeNetkit ||
+		option.Config.DatapathMode == datapathOption.DatapathModeNetkitL2
+
 	if !option.Config.UnsafeDaemonConfigOption.EnableHostLegacyRouting {
 		msg := ""
 		switch {
@@ -54,9 +58,18 @@ func (r *kprInitializer) InitKubeProxyReplacementOptions() error {
 			msg = fmt.Sprintf("BPF host routing requires %s.", option.KubeProxyReplacement)
 		}
 		if msg != "" {
+			if netkitMode {
+				return fmt.Errorf("%s and %s=%s is incompatible with legacy host routing; "+
+					"set the missing requirement instead of falling back",
+					msg, option.DatapathMode, option.Config.DatapathMode)
+			}
 			option.Config.UnsafeDaemonConfigOption.EnableHostLegacyRouting = true
 			r.logger.Info(fmt.Sprintf("%s Falling back to legacy host routing (%s=true).", msg, option.EnableHostLegacyRouting))
 		}
+	} else if netkitMode {
+		return fmt.Errorf("%s=%s requires BPF host routing; %s=true is incompatible",
+			option.DatapathMode, option.Config.DatapathMode,
+			option.EnableHostLegacyRouting)
 	}
 
 	r.logger.Info("kube-proxy replacement starting with the following config",
