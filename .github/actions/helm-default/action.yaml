@@ -17,6 +17,10 @@ inputs:
     description: "Enable the kube cache mutation detection"
     required: false
     default: 'false'
+  image-pull-secret:
+    description: "Whether to include the image pull secret in the generated defaults"
+    required: false
+    default: ''
 outputs:
   cilium_install_defaults:
     description: "Generated values to be used with Cilium CLI"
@@ -89,6 +93,10 @@ runs:
         if [ "${{ inputs.debug }}" == "true" ]; then
           CILIUM_INSTALL_DEFAULTS+=" --helm-set=debug.enabled=true \
             --helm-set=debug.verbose=envoy"
+        fi
+
+        if [ "${{ inputs.image-pull-secret }}" != "" ]; then
+          CILIUM_INSTALL_DEFAULTS+=" --helm-set=imagePullSecrets[0].name=${{ inputs.image-pull-secret }}"
         fi
 
         echo cilium_install_defaults=${CILIUM_INSTALL_DEFAULTS} >> $GITHUB_OUTPUT

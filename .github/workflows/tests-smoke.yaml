@@ -81,6 +81,9 @@ jobs:
     if: ${{ needs.check_changes.outputs.tested == 'true' && github.event_name != 'merge_group' }}
     runs-on: ubuntu-24.04
     name: Installation and Conformance Test
+    environment:
+      name: test-with-images
+
     steps:
       - name: Collect Workflow Telemetry
         uses: cilium/workflow-telemetry-action@b1a318f80a08acede58027afe1455d037379966f # v2.2.0
@@ -100,6 +103,7 @@ jobs:
         uses: ./.github/actions/helm-default
         with:
           image-tag: ${{ github.event.pull_request.head.sha || github.sha }}
+          image-pull-secret: "cilium-registry"
 
       - name: Set image tag
         id: sha
@@ -120,6 +124,21 @@ jobs:
           kubectl_version: ${{ env.KIND_K8S_VERSION }}
           config: ${{ env.KIND_CONFIG }}
           wait: 0 # The control-plane never becomes ready, since no CNI is present
+
+      - name: Create imagePullSecret
+        run: |
+          kubectl create secret docker-registry cilium-registry \
+            --namespace kube-system \
+            --docker-server=${{ vars.DOCKER_READ_HOST }} \
+            --docker-username="${{ vars.DOCKER_READ_USERNAME }}" \
+            --docker-password="${{ secrets.DOCKER_READ_PASSWORD }}"
+
+      - name: Login to docker registry for pushing images
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          registry: ${{ vars.DOCKER_READ_HOST}}
+          username: ${{ vars.DOCKER_READ_USERNAME}}
+          password: ${{ secrets.DOCKER_READ_PASSWORD }}
 
       - name: Wait for images to be available
         timeout-minutes: 30
